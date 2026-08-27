@@ -28,6 +28,31 @@ function requiredText(max: number, label: string) {
     .max(max, `${label} must be ${max} characters or fewer`);
 }
 
+const PHOTO_DATA_URL =
+  /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+function decodedBase64Size(value: string): number {
+  const encoded = value.slice(value.indexOf(",") + 1);
+  const padding = encoded.length - encoded.replace(/=+$/, "").length;
+  return Math.floor(encoded.length / 4) * 3 - padding;
+}
+
+const optionalPhoto = z
+  .string()
+  .trim()
+  .transform((value) => value || null)
+  .nullable()
+  .default(null)
+  .refine(
+    (value) => value === null || PHOTO_DATA_URL.test(value),
+    "Choose a JPEG, PNG, or WebP image",
+  )
+  .refine(
+    (value) => value === null || decodedBase64Size(value) <= MAX_PHOTO_BYTES,
+    "Photo must be 2 MiB or smaller",
+  );
+
 export const contactInputSchema = z.object({
   first_name: requiredText(100, "First name"),
   last_name: requiredText(100, "Last name"),
@@ -52,6 +77,7 @@ export const contactInputSchema = z.object({
     .transform((value) => value || null)
     .nullable()
     .default(null),
+  photo: optionalPhoto,
 }) satisfies z.ZodType<ContactInput, unknown>;
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
@@ -218,10 +244,13 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 export function formDataToValues(
   formData: FormData,
 ): Record<keyof ContactInput, string> {
-  return Object.fromEntries(
-    CONTACT_FIELDS.map((field) => [
-      field.name,
-      String(formData.get(field.name) ?? ""),
-    ]),
-  ) as Record<keyof ContactInput, string>;
+  return {
+    ...Object.fromEntries(
+      CONTACT_FIELDS.map((field) => [
+        field.name,
+        String(formData.get(field.name) ?? ""),
+      ]),
+    ),
+    photo: String(formData.get("photo") ?? ""),
+  } as Record<keyof ContactInput, string>;
 }

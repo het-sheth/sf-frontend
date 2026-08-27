@@ -5,7 +5,12 @@ import {
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 
-function values(overrides: Record<string, string> = {}) {
+const PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+function values(
+  overrides: Record<string, string> = {},
+): Record<string, string> {
   return {
     first_name: "Ada",
     last_name: "Lovelace",
@@ -19,6 +24,7 @@ function values(overrides: Record<string, string> = {}) {
     postal_code: "",
     country: "",
     notes: "",
+    photo: "",
     ...overrides,
   };
 }
@@ -30,10 +36,45 @@ describe("contactInputSchema", () => {
     expect(parsed.email).toBe("ada@example.com");
     expect(parsed.phone).toBeNull();
     expect(parsed.notes).toBeNull();
+    expect(parsed.photo).toBeNull();
   });
 
-  it("trims what the user typed", () => {
-    expect(contactInputSchema.parse(values({ company: "  Acme  " })).company).toBe(
+  it("accepts a valid photo data URL", () => {
+    expect(contactInputSchema.parse(values({ photo: PNG_DATA_URL })).photo).toBe(
+      PNG_DATA_URL,
+    );
+  });
+
+  it("defaults an omitted photo to null", () => {
+    const withoutPhoto = values();
+    delete withoutPhoto.photo;
+
+    expect(contactInputSchema.parse(withoutPhoto).photo).toBeNull();
+  });
+
+  it("rejects an unsupported photo MIME type", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/gif;base64,R0lGODlhAQABAAAAACw=" }),
+    );
+
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Choose a JPEG, PNG, or WebP image",
+    );
+  });
+
+  it("rejects an oversized photo payload", () => {
+    const result = contactInputSchema.safeParse(
+      values({
+        photo: `data:image/png;base64,${"A".repeat(2_796_204)}`,
+      }),
+    );
+
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be 2 MiB or smaller",
+    );
+  });
+
+  it("trims what the user typed", () => {    expect(contactInputSchema.parse(values({ company: "  Acme  " })).company).toBe(
       "Acme",
     );
   });
@@ -79,8 +120,9 @@ describe("formDataToValues", () => {
 
     expect(extracted.first_name).toBe("Grace");
     expect(extracted.last_name).toBe("");
+    expect(extracted.photo).toBe("");
     expect(Object.keys(extracted).sort()).toEqual(
-      CONTACT_FIELDS.map((field) => field.name).sort(),
+      [...CONTACT_FIELDS.map((field) => field.name), "photo"].sort(),
     );
   });
 });
