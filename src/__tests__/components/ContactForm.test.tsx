@@ -5,6 +5,9 @@ import ContactForm from "@/components/contacts/ContactForm";
 import { makeContact } from "../mocks/handlers";
 import type { FormState } from "@/lib/contacts/types";
 
+const PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 function renderForm(action: jest.Mock, contact?: ReturnType<typeof makeContact>) {
   return render(
     <ContactForm
@@ -25,6 +28,22 @@ describe("ContactForm", () => {
     expect(screen.getByLabelText(/^email/i)).toBeRequired();
     expect(screen.getByLabelText(/phone/i)).not.toBeRequired();
     expect(screen.getByLabelText(/notes/i).tagName).toBe("TEXTAREA");
+    expect(screen.getByLabelText(/choose photo/i)).toHaveAttribute(
+      "accept",
+      "image/jpeg,image/png,image/webp",
+    );
+  });
+
+  it("preserves an existing photo in the PUT form data", () => {
+    const { container } = renderForm(
+      jest.fn(),
+      makeContact({ photo: PNG_DATA_URL }),
+    );
+
+    expect(container.querySelector('input[name="photo"]')).toHaveValue(
+      PNG_DATA_URL,
+    );
+    expect(screen.queryByRole("button", { name: /remove photo/i })).not.toBeInTheDocument();
   });
 
   it("prefills from an existing contact", () => {
